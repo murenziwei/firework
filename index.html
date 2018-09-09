@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html>
+   <head>
+      <meta charset="UTF-8">
+	  <title>
+	       教师节快乐
+	  </title>
+	  <style>
+	     #firework{
+		    background-color:black;
+		 }
+	  </style>	
+   </head>
+   <body>
+   	   <canvas id="firework"></canvas>
+	   <script>
+	       function liwei(tar,str){
+		      	window.requestAnimFrame = ( function() {
+					return window.requestAnimationFrame ||
+								window.webkitRequestAnimationFrame ||
+								window.mozRequestAnimationFrame ||
+								function( callback ) {
+									window.setTimeout( callback, 1000 / 60 );
+								};
+				})();
+
+				// 现在我们将为演示设置基本变量
+				var canvas = tar,
+						ctx = canvas.getContext( '2d' ),
+						// 全屏幕尺寸
+						cw = window.innerWidth,
+						ch = window.innerHeight,
+						// 烟花集合
+						fireworks = [],
+						// 粒子收集
+						particles = [],
+						// 从色调
+						hue = 120,
+						// 当你点击时，有太多的人会在没有限制器的情况下启动，每5个循环滴答响一次
+						limiterTotal = 5,
+						limiterTick = 0,
+						// 这将会是自动发射烟花的时间，每80个环的发射一次
+						timerTotal = 80,
+						timerTick = 0,
+						mousedown = false,
+						// 鼠标x坐标
+						mx,
+						// 鼠标y坐标
+						my;
+						
+				// 设置画布尺寸
+				canvas.width = cw;
+				canvas.height = ch;
+
+				// 现在我们要为整个演示设置我们的函数占位符
+
+				// 在一个范围内得到一个随机数
+				function random( min, max ) {
+					return Math.random() * ( max - min ) + min;
+				}
+
+				// 计算两点之间的距离
+				function calculateDistance( p1x, p1y, p2x, p2y ) {
+					var xDistance = p1x - p2x,
+							yDistance = p1y - p2y;
+					return Math.sqrt( Math.pow( xDistance, 2 ) + Math.pow( yDistance, 2 ) );
+				}
+
+				// 创建烟花函数
+				function Firework( sx, sy, tx, ty ) {
+					// 实际坐标
+					this.x = sx;
+					this.y = sy;
+					// 开始坐标
+					this.sx = sx;
+					this.sy = sy;
+					// 靶点坐标
+					this.tx = tx;
+					this.ty = ty;
+					// 从起点到目标的距离
+					this.distanceToTarget = calculateDistance( sx, sy, tx, ty );
+					this.distanceTraveled = 0;
+					// 跟踪每一个烟花的过去坐标，以创造一个轨迹效果，增加坐标数以创造更显著的轨迹
+					this.coordinates = [];
+					this.coordinateCount = 3;
+					// 用当前坐标填充初始坐标集合
+					while( this.coordinateCount-- ) {
+						this.coordinates.push( [ this.x, this.y ] );
+					}
+					this.angle = Math.atan2( ty - sy, tx - sx );
+					this.speed = 2;
+					this.acceleration = 1.05;
+					this.brightness = random( 50, 70 );
+					// 圆目标指示器半径
+					this.targetRadius = 1;
+				}
+
+				// 更新烟花
+				Firework.prototype.update = function( index ) {
+					// 删除坐标数组中的最后一项
+					this.coordinates.pop();
+					// 在数组开始时添加当前坐标
+					this.coordinates.unshift( [ this.x, this.y ] );
+					
+					// 循环目标指示器半径
+					if( this.targetRadius < 8 ) {
+						this.targetRadius += 0.3;
+					} else {
+						this.targetRadius = 1;
+					}
+					
+					// 加速烟花
+					this.speed *= this.acceleration;
+					
+					// 根据角度和速度获得当前速度
+					var vx = Math.cos( this.angle ) * this.speed,
+							vy = Math.sin( this.angle ) * this.speed;
+					// 烟花的传播速度随机
+					this.distanceTraveled = calculateDistance( this.sx, this.sy, this.x + vx, this.y + vy );
+					
+					// 如果移动的距离，包括速度，大于到达目标的初始距离，那么目标就达到了
+					if( this.distanceTraveled >= this.distanceToTarget ) {
+						createParticles( this.tx, this.ty );
+						// 删除烟花，使用传递到更新功能的索引来确定要删除哪些内容
+						fireworks.splice( index, 1 );
+					} else {
+						// 目标没有到达，继续旅行
+						this.x += vx;
+						this.y += vy;
+					}
+				}
+
+				// 画烟花
+				Firework.prototype.draw = function() {
+					ctx.beginPath();
+					// 移到集合中的最后一个跟踪坐标，然后画一条线到当前的x和y
+					ctx.moveTo( this.coordinates[ this.coordinates.length - 1][ 0 ], this.coordinates[ this.coordinates.length - 1][ 1 ] );
+					ctx.lineTo( this.x, this.y );
+					ctx.strokeStyle = 'hsl(' + hue + ', 100%, ' + this.brightness + '%)';
+					ctx.stroke();
+					
+					ctx.beginPath();
+					// 用脉冲圈画出这个烟花的目标
+					ctx.arc( this.tx, this.ty, this.targetRadius, 0, Math.PI * 2 );
+					ctx.stroke();
+				}
+
+				// 创建粒子
+				function Particle( x, y ) {
+					this.x = x;
+					this.y = y;
+					// 跟踪每个粒子的过去坐标来创建一个轨迹效果，增加坐标数以创建更显著的轨迹
+					this.coordinates = [];
+					this.coordinateCount = 5;
+					while( this.coordinateCount-- ) {
+						this.coordinates.push( [ this.x, this.y ] );
+					}
+					// 在所有可能的方向上设置一个随机的角度，用弧度表示
+					this.angle = random( 0, Math.PI * 2 );
+					this.speed = random( 1, 10 );
+					// 摩擦会减慢粒子的速度
+					this.friction = 0.95;
+					// 重力将被应用并将粒子拉下来
+					this.gravity = 1;
+					// 将色相设置为一个随机数+-20的整体色调变量
+					this.hue = random( hue - 20, hue + 20 );
+					this.brightness = random( 50, 80 );
+					this.alpha = 1;
+					// 设定粒子的速度有多快
+					this.decay = random( 0.015, 0.03 );
+				}
+
+				// 更新粒子
+				Particle.prototype.update = function( index ) {
+					// 删除坐标数组中的最后一项
+					this.coordinates.pop();
+					// 在数组开始时添加当前坐标
+					this.coordinates.unshift( [ this.x, this.y ] );
+					// 减慢粒子的速度
+					this.speed *= this.friction;
+					// 适用于速度
+					this.x += Math.cos( this.angle ) * this.speed;
+					this.y += Math.sin( this.angle ) * this.speed + this.gravity;
+					// 淡出粒子
+					this.alpha -= this.decay;
+					
+					// 根据已通过的索引，在alpha值足够低的情况下删除该粒子
+					if( this.alpha <= this.decay ) {
+						particles.splice( index, 1 );
+					}
+				}
+
+
+
+				// 得出粒子
+				Particle.prototype.draw = function() {
+					  
+				  ctx. beginPath();
+					// 移动到集合中最后一个被跟踪的坐标，然后画一条线到当前的x和y
+					ctx.moveTo( this.coordinates[ this.coordinates.length - 1 ][ 0 ], this.coordinates[ this.coordinates.length - 1 ][ 1 ] );
+					ctx.lineTo( this.x, this.y );
+					ctx.strokeStyle = 'hsla(' + this.hue + ', 100%, ' + this.brightness + '%, ' + this.alpha + ')';
+					ctx.stroke();
+				  
+				  
+				}
+
+				// 创建粒子组/爆炸
+				function createParticles( x, y ) {
+					// 增加一个更大的爆炸的粒子数，注意在增加的粒子中受到的画布性能的影响
+					var particleCount = 30;
+					while( particleCount-- ) {
+						particles.push( new Particle( x, y ) );
+					}
+				}
+
+				// 主要演示循环
+				function loop() {
+					// 这个函数将在requestAnimationFrame中无限运行
+					requestAnimFrame( loop );
+					
+					// 随着时间的推移，增加色调以获得不同颜色的烟花
+					hue += 0.5;
+					
+					// 通常，clearRect（）将用于清除画布
+					// 我们想要创建一个拖尾效果
+					// 将复合操作设置为目的地，将允许我们以特定的不透明度清除画布，而不是完全清除画布。
+					ctx.globalCompositeOperation = 'destination-out';
+					// 减少alpha属性以创建更突出的路径
+					ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+					ctx.fillRect( 0, 0, cw, ch );
+					// 将复合操作更改回主模式
+					// 当烟花和粒子相互重叠时，打火机会产生明亮的高光点。
+					ctx.globalCompositeOperation = 'lighter';
+					
+					var text = str;  
+				  ctx.font = "50px sans-serif";
+				  var textData = ctx.measureText(text);
+				  ctx.strokeStyle = "rgba("+parseInt(random(0,255))+","+parseInt(random(0,255))+","+parseInt(random(0,255))+",0.3)";
+				  ctx.strokeText(text,cw /2-textData.width/2,ch/2); 
+				  
+					// 循环播放每一个焰火，绘制它，更新它
+					var i = fireworks.length;
+					while( i-- ) {
+						fireworks[ i ].draw();
+						fireworks[ i ].update( i );
+					}
+					
+					// 对每个粒子进行循环，绘制它，更新它
+					var i = particles.length;
+					while( i-- ) {
+						particles[ i ].draw();
+						particles[ i ].update( i );
+					}
+					
+					// 当鼠标不下落时，自动将烟花发射到随机的坐标上。
+					if( timerTick >= timerTotal ) {
+						if( !mousedown ) {
+							// 在屏幕的底部启动烟花，然后设置随机目标坐标，随机的y坐标将设置在屏幕上半部分的范围内
+					  
+					  for(var h=0;h<50;h++)
+					  {
+						   fireworks.push( new Firework( cw / 2, ch/2, random( 0, cw ), random( 0, ch  ) ) );
+					  }
+					  
+					  
+							timerTick = 0;
+						}
+					} else {
+						timerTick++;
+					}
+					
+					// 当鼠标下降时，限制燃放烟花爆竹的速度
+					if( limiterTick >= limiterTotal ) {
+						if( mousedown ) {
+							// 在屏幕的底部启动烟火，然后将当前的鼠标坐标设置为目标
+							fireworks.push( new Firework( cw / 2, ch/2, mx, my ) );
+							limiterTick = 0;
+						}
+					} else {
+						limiterTick++;
+					}
+				}
+
+				// 鼠标事件绑定
+				// u更新鼠标上的鼠标坐标
+				canvas.addEventListener( 'mousemove', function( e ) {
+					mx = e.pageX - canvas.offsetLeft;
+					my = e.pageY - canvas.offsetTop;
+				});
+
+				// 切换鼠标关闭状态，防止画布被选中
+				canvas.addEventListener( 'mousedown', function( e ) {
+					e.preventDefault();
+					mousedown = true;
+				});
+
+				canvas.addEventListener( 'mouseup', function( e ) {
+					e.preventDefault();
+					mousedown = false;
+				});
+
+				// 一旦窗户装好，我们就准备好放烟火了！
+				window.onload = loop;
+		   }
+		   liwei(document.getElementById("firework"),"小李子永远祝福不忘初心的老师们教师节快乐");
+	   </script>
+   </body>
+</html>
